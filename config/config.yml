@@ -1,0 +1,14 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+
+
+database:
+  dsn: ""
+  host: db
+  port: 5432
+  user: postgres
+  password: 12345678
+  name: warehouse
+  sslmode: disable
+
