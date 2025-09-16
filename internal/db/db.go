@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 	"warehouse/internal/models"
 
@@ -62,7 +63,12 @@ func (d *DB) DeleteItem(ctx context.Context, id int) error {
 }
 
 func (d *DB) GetHistory(ctx context.Context) ([]models.History, error) {
-	rows, err := d.DB.QueryWithRetry(ctx, r, "SELECT id, item_id, action, changed_by, timestamp, old_data, new_data FROM history ORDER BY timestamp DESC")
+	rows, err := d.DB.QueryWithRetry(ctx, r, `
+	SELECT id, item_id, action, coalesce(changed_by,''), timestamp, 
+		   COALESCE(CAST(old_data AS TEXT),''), COALESCE(CAST(new_data AS TEXT),'')
+	FROM history
+	ORDER BY timestamp DESC, id DESC
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +83,37 @@ func (d *DB) GetHistory(ctx context.Context) ([]models.History, error) {
 		history = append(history, h)
 	}
 	return history, rows.Err()
+}
+
+func (d *DB) GetItemHistory(ctx context.Context, itemID int) ([]models.History, error) {
+	rows, err := d.DB.QueryWithRetry(ctx, r, `
+		SELECT id, item_id, action, coalesce(changed_by,''), timestamp, 
+		       COALESCE(CAST(old_data AS TEXT),''), COALESCE(CAST(new_data AS TEXT),'')
+		FROM history
+		WHERE item_id=$1
+		ORDER BY timestamp DESC, id DESC
+	`, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query history: %w", err)
+	}
+	defer rows.Close()
+
+	var history []models.History
+	for rows.Next() {
+		var h models.History
+		var ts time.Time
+		if err := rows.Scan(&h.ID, &h.ItemID, &h.Action, &h.ChangedBy, &ts, &h.OldData, &h.NewData); err != nil {
+			return nil, fmt.Errorf("failed to scan history row: %w", err)
+		}
+		h.Timestamp = ts.Format(time.RFC3339)
+		history = append(history, h)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return history, nil
 }
 
 func (d *DB) GetUser(ctx context.Context, username, password string) (*models.User, error) {

@@ -4,7 +4,7 @@ server:
 
 
 database:
-  dsn: ""
+  dsn: "postgres://postgres:postgres@db:5432/warehouse?sslmode=disable"
   host: db
   port: 5432
   user: postgres
@@ -12,3 +12,4 @@ database:
   name: warehouse
   sslmode: disable
 
+jwt_secret: andrey

@@ -22,8 +22,9 @@ type DB struct {
 }
 
 type Config struct {
-	Server Server
-	DB     DB
+	JWTSecret []byte
+	Server    Server
+	DB        DB
 }
 
 func Load(path string) (*Config, error) {
@@ -32,6 +33,7 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	cfg := &Config{
+		JWTSecret: []byte(v.GetString("jwt_secret")),
 		Server: Server{
 			Host: v.GetString("server.host"),
 			Port: v.GetInt("server.port"),
@@ -49,9 +51,9 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
-func (d DB) DSNString() string {
-	if d.DSN != "" {
-		return d.DSN
+func (c Config) DSNString() string {
+	if c.DB.DSN != "" {
+		return c.DB.DSN
 	}
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", c.DB.User, c.DB.Password, c.DB.Host, c.DB.Port, c.DB.Name, c.DB.SSLMode)
 }

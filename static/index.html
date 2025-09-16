@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WarehouseControl</title>
+  <style>
+    :root{
+      --bg:#0e0e10; --panel:#151518; --line:#222228; --muted:#8b8b96; --fg:#e6e6eb;
+      --accent:#6ea8fe; --ok:#35b46f; --warn:#d7a83e; --bad:#ff6b6b;
+      --chip:#1b1b20; --shadow:0 10px 25px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    a{color:var(--accent); text-decoration:none}
+    header{
+      position:sticky; top:0; z-index:10;
+      backdrop-filter:saturate(1.2) blur(8px);
+      background:linear-gradient(0deg, transparent, rgba(0,0,0,.35));
+      border-bottom:1px solid var(--line);
+      padding:14px 20px; display:flex; gap:14px; align-items:center; justify-content:space-between;
+    }
+    .brand{display:flex; align-items:center; gap:10px; font-weight:600}
+    .dot{width:10px; height:10px; border-radius:50%; background:var(--accent); box-shadow:0 0 12px var(--accent)}
+    .toolbar{display:flex; gap:10px; align-items:center}
+    .chip{padding:6px 10px; border-radius:999px; background:var(--chip); border:1px solid var(--line); color:var(--muted)}
+    input, select, button{
+      background:#0f0f12; color:var(--fg); border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+    }
+    input::placeholder{color:#6f6f78}
+    button{cursor:pointer; transition:transform .05s ease, background .2s ease;}
+    button:hover{transform:translateY(-1px)}
+    button.primary{background:var(--accent); color:#0a0a0d; border-color:transparent; font-weight:600}
+    button.ghost{background:transparent}
+    button.bad{background:transparent; border-color:#3a1f25; color:#ff9aa7}
+    main{max-width:1100px; margin:22px auto; padding:0 16px; display:grid; grid-template-columns:1.2fr .8fr; gap:18px}
+    .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); overflow:hidden}
+    .card h3{margin:0; padding:14px 16px; border-bottom:1px solid var(--line); font-size:15px}
+    .card .content{padding:16px}
+    .row{display:flex; gap:10px; flex-wrap:wrap}
+    .grow{flex:1 1 auto}
+    table{width:100%; border-collapse:collapse; border:1px solid var(--line); overflow:hidden; border-radius:10px}
+    th,td{padding:10px 12px; border-bottom:1px solid var(--line)}
+    th{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em}
+    tr:hover td{background:#121217}
+    .right{text-align:right}
+    .muted{color:var(--muted)}
+    .actions{display:flex; gap:8px; justify-content:flex-end}
+    .pill{padding:4px 8px; border-radius:999px; border:1px solid var(--line); background:var(--chip); font-size:12px}
+    .toast{position:fixed; bottom:20px; right:20px; background:#111114; border:1px solid var(--line); color:var(--fg);
+           padding:12px 14px; border-radius:12px; box-shadow:var(--shadow); opacity:0; transform:translateY(10px);
+           transition:.25s ease; pointer-events:none}
+    .toast.show{opacity:1; transform:translateY(0)}
+    .hidden{display:none !important}
+    @media (max-width:900px){ main{grid-template-columns:1fr} header{flex-wrap:wrap} }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span> WarehouseControl <span class="chip" id="roleChip">гость</span></div>
+  <div class="toolbar">
+    <input id="username" placeholder="username" value="alice" />
+    <input id="password" placeholder="password" value="alice" type="password" />
+    <button class="primary" id="loginBtn">Войти</button>
+    <button class="ghost hidden" id="logoutBtn">Выйти</button>
+  </div>
+</header>
+
+<main>
+  <section class="card" id="invCard">
+    <h3>Склад — Товары</h3>
+    <div class="content">
+      <div class="row" id="createRow">
+        <input id="newName" class="grow" placeholder="Название товара" />
+        <input id="newCount" type="number" min="0" value="1" style="width:140px" />
+        <button class="primary" id="addBtn">Добавить</button>
+      </div>
+      <div style="height:10px"></div>
+      <table id="itemsTbl">
+        <thead><tr><th style="width:70px">ID</th><th>Наименование</th><th class="right" style="width:120px">Кол-во</th><th style="width:160px"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="muted" id="emptyItems" style="padding:10px 2px; display:none">Пока пусто. Добавьте первый товар.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3>История</h3>
+    <div class="content">
+      <div class="row">
+        <select id="fltAction">
+          <option value="">Все действия</option>
+          <option value="insert">insert</option>
+          <option value="update">update</option>
+          <option value="delete">delete</option>
+        </select>
+        <input id="fltUser" placeholder="Пользователь" />
+        <input id="fltItem" type="number" min="0" placeholder="ID товара" style="width:140px" />
+        <button id="filterBtn">Показать</button>
+        <button id="exportBtn">Экспорт CSV</button>
+      </div>
+      <div style="height:10px"></div>
+      <table id="histTbl">
+        <thead><tr><th style="width:80px">ID</th><th style="width:90px">Item</th><th style="width:90px">Action</th><th>Кто</th><th style="width:200px">Когда</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="muted" id="emptyHist" style="padding:10px 2px; display:none">История изменений пуста.</div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = ''; // если сервер под /api — поставьте '/api'
+let token = localStorage.getItem('token') || '';
+let role  = localStorage.getItem('role')  || '';
+let me    = localStorage.getItem('me')    || '';
+
+const q = (s, el=document)=>el.querySelector(s);
+const qa = (s, el=document)=>Array.from(el.querySelectorAll(s));
+
+function headers(json=true){
+  const h = {};
+  if (json) h['Content-Type'] = 'application/json';
+  if (token) h['Authorization'] = 'Bearer ' + token;
+  return h;
+}
+
+function toast(msg, kind){
+  const el = q('#toast');
+  el.textContent = msg;
+  el.style.borderColor = kind==='bad' ? '#3a1f25' : 'var(--line)';
+  el.classList.add('show');
+  setTimeout(()=> el.classList.remove('show'), 2200);
+}
+
+function setAuthUI(){
+  q('#roleChip').textContent = token ? (role || 'user') : 'гость';
+  q('#loginBtn').classList.toggle('hidden', !!token);
+  q('#logoutBtn').classList.toggle('hidden', !token);
+  const canWrite = role === 'admin' || role === 'manager';
+  q('#createRow').style.display = canWrite ? 'flex' : 'none';
+  qa('.btn-edit,.btn-del').forEach(btn => btn.disabled = !canWrite);
+}
+
+async function login(){
+  try{
+    const body = {
+      username: q('#username').value.trim() || 'alice',
+      password: q('#password').value.trim() || 'alice',
+    };
+    const r = await fetch(API + '/login', { method:'POST', headers: headers(true), body: JSON.stringify(body) });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'Login failed');
+    token = data.token || '';
+    role  = data.role  || '';
+    me    = body.username;
+    localStorage.setItem('token', token);
+    localStorage.setItem('role', role);
+    localStorage.setItem('me', me);
+    setAuthUI();
+    toast('Вход выполнен');
+    await refresh();
+  }catch(e){
+    toast(e.message, 'bad');
+    console.error(e);
+  }
+}
+
+function logout(){
+  token = role = me = '';
+  localStorage.removeItem('token'); localStorage.removeItem('role'); localStorage.removeItem('me');
+  setAuthUI();
+  renderItems([]);
+  renderHistory([]);
+}
+
+async function fetchJSON(url, opts={}){
+  const r = await fetch(url, opts);
+  const ct = r.headers.get('content-type')||'';
+  const isJSON = ct.includes('application/json');
+  const data = isJSON ? await r.json() : await r.text();
+  if(!r.ok){
+    const msg = (data && data.error) ? data.error : (data && typeof data === 'string' ? data : 'Request failed');
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function renderItems(items){
+  const tb = q('#itemsTbl tbody');
+  tb.innerHTML = '';
+  q('#emptyItems').style.display = items.length ? 'none' : 'block';
+  const canWrite = role === 'admin' || role === 'manager';
+  items.forEach(x => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${x.id}</td>
+      <td>${escapeHtml(x.name)}</td>
+      <td class="right">${x.count}</td>
+      <td class="actions">
+        <button class="btn-edit" ${canWrite?'':'disabled'} data-id="${x.id}">✏️ Изменить</button>
+        <button class="btn-del bad" ${canWrite?'':'disabled'} data-id="${x.id}">🗑 Удалить</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+  qa('.btn-edit', tb).forEach(btn => btn.onclick = onEditItem);
+  qa('.btn-del', tb).forEach(btn => btn.onclick = onDeleteItem);
+}
+
+function renderHistory(rows){
+  const tb = q('#histTbl tbody');
+  tb.innerHTML = '';
+  q('#emptyHist').style.display = rows.length ? 'none' : 'block';
+  rows.forEach(h => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${h.id}</td>
+      <td>${h.item_id ?? ''}</td>
+      <td><span class="pill">${h.action}</span></td>
+      <td class="muted">${escapeHtml(h.changed_by || '')}</td>
+      <td class="muted">${escapeHtml(h.timestamp || '')}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function loadItems(){
+  const data = await fetchJSON(API + '/items', { headers: headers(false) });
+  const list = Array.isArray(data) ? data : (data.items||[]);
+  renderItems(list);
+}
+
+async function addItem(){
+  try{
+    const name = q('#newName').value.trim();
+    const count = parseInt(q('#newCount').value||'0', 10);
+    if(!name){ q('#newName').focus(); return; }
+    await fetchJSON(API + '/items', { method:'POST', headers: headers(true), body: JSON.stringify({ name, count }) });
+    q('#newName').value=''; q('#newCount').value='1';
+    toast('Товар добавлен', 'ok');
+    await loadItems();
+  }catch(e){
+    toast('Add item error: ' + e.message, 'bad');
+  }
+}
+
+async function onEditItem(e){
+  const id = parseInt(e.currentTarget.dataset.id,10);
+  const row = e.currentTarget.closest('tr');
+  const name = prompt('Новое имя', row.children[1].textContent.trim());
+  if(name === null) return;
+  const count = parseInt(prompt('Новое количество', row.children[2].textContent.trim()) || '0', 10);
+  try{
+    await fetchJSON(API + '/items/' + id, { method:'PUT', headers: headers(true), body: JSON.stringify({ name, count }) });
+    toast('Изменения сохранены');
+    await loadItems();
+  }catch(err){
+    toast('Update error: ' + err.message, 'bad');
+  }
+}
+
+async function onDeleteItem(e){
+  const id = parseInt(e.currentTarget.dataset.id,10);
+  if(!confirm('Удалить товар #' + id + '?')) return;
+  try{
+    await fetchJSON(API + '/items/' + id, { method:'DELETE', headers: headers(false) });
+    toast('Удалено');
+    await loadItems();
+  }catch(err){
+    toast('Delete error: ' + err.message, 'bad');
+  }
+}
+
+async function loadHistory(){
+  // UI фильтров заготовлен; если сделаешь поддержку на бэке — добавь параметры к URL
+  const data = await fetchJSON(API + '/history', { headers: headers(false) });
+  const list = Array.isArray(data) ? data : (data.history||data||[]);
+  renderHistory(list);
+}
+
+async function exportCSV(){
+  try{
+    const r = await fetch(API + '/history?format=csv', { headers: headers(false) });
+    if(!r.ok) throw new Error('Export failed');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'history.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    toast('Export error: ' + e.message, 'bad');
+  }
+}
+
+async function refresh(){
+  await loadItems();
+  await loadHistory();
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+
+q('#loginBtn').onclick = login;
+q('#logoutBtn').onclick = logout;
+q('#addBtn').onclick = addItem;
+q('#filterBtn').onclick = loadHistory;
+q('#exportBtn').onclick = exportCSV;
+
+setAuthUI();
+if (token) refresh();
+</script>
+</body>
+</html>

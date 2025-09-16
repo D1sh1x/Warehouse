@@ -11,6 +11,7 @@ import (
 	"warehouse/internal/config"
 	"warehouse/internal/db"
 	"warehouse/internal/handlers"
+	"warehouse/internal/middleware"
 
 	"github.com/wb-go/wbf/ginext"
 	"github.com/wb-go/wbf/zlog"
@@ -24,7 +25,7 @@ func main() {
 		zlog.Logger.Fatal().Err(err).Msg("Failed to load config")
 	}
 
-	database, err := db.NewDB(cfg.DB.DSN)
+	database, err := db.NewDB(cfg.DSNString())
 
 	if err != nil {
 		zlog.Logger.Fatal().Err(err).Msg("Failed to connect database")
@@ -32,18 +33,27 @@ func main() {
 
 	defer database.DB.Master.Close()
 
-	handler := handlers.NewHandler(database)
+	handler := handlers.NewHandler(database, cfg.JWTSecret)
 
 	r := ginext.New()
 
 	r.Static("/static", "./static")
-	r.LoadHTMLGlob("static/*.html")
-
-	//Дописать методы для r
-
 	r.GET("/", func(c *ginext.Context) {
-		c.HTML(200, "index.html", nil)
+		c.File("./static/index.html")
 	})
+
+	r.POST("/login", handler.Login)
+
+	auth := r.Group("")
+	auth.Use(middleware.AuthRequired(cfg.JWTSecret))
+
+	auth.GET("/items", middleware.RequireRole("admin", "manager", "viewer"), handler.GetItems)
+	auth.POST("/items", middleware.RequireRole("admin", "manager"), handler.CreateItem)
+	auth.PUT("/items/:id", middleware.RequireRole("admin", "manager"), handler.UpdateItem)
+	auth.DELETE("/items/:id", middleware.RequireRole("admin"), handler.DeleteItem)
+
+	auth.GET("/items/:id/history", middleware.RequireRole("admin", "manager", "viewer"), handler.ItemHistory)
+	auth.GET("/history", middleware.RequireRole("admin", "manager", "viewer"), handler.GetHistory)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
